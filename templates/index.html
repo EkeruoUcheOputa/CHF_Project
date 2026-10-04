@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Emoji Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🩺</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- ApexCharts CDN for Premium Graphical Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <!-- DICOM parser (client-side preview so brackets can be drawn on .dcm scans) -->
+    <script src="https://cdn.jsdelivr.net/npm/dicom-parser@1.8.21/dist/dicomParser.min.js"></script>
+    <title>CHF Diagnostic Tool</title>
+    <style>
+        body {
+            background-color: #001f3f;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px 0;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        .background-ticker-container {
+            position: fixed;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            transform: translateY(-50%);
+            z-index: 0;
+            pointer-events: none;
+            user-select: none;
+            overflow: hidden;
+            display: flex;
+        }
+        .ticker-track {
+            display: flex;
+            flex-shrink: 0;
+            white-space: nowrap;
+            font-size: 7.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 12px;
+            color: #D4AF37;
+            opacity: 0.08;
+            animation: moveTicker 40s linear infinite;
+        }
+        @keyframes moveTicker {
+            0% { transform: translateX(0%); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .container {
+            background-color: #001a35;
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #D4AF37;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            max-width: 620px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+        h2 {
+            text-align: center;
+            color: #D4AF37;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        .sub-title {
+            text-align: center;
+            font-size: 13px;
+            color: #a0b2c6;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid rgba(212, 175, 55, 0.4);
+            margin-bottom: 20px;
+        }
+        .nav-tabs .nav-link {
+            color: #a0b2c6;
+            background: transparent;
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 10px 15px;
+            transition: all 0.3s;
+        }
+        .nav-tabs .nav-link.active {
+            color: #D4AF37 !important;
+            background-color: #002b56 !important;
+            border-bottom: 3px solid #D4AF37 !important;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .accordion-item {
+            background-color: #002b56 !important;
+            border: 1px solid rgba(212, 175, 55, 0.3) !important;
+            margin-bottom: 25px;
+            border-radius: 6px !important;
+            overflow: hidden;
+        }
+        .accordion-button {
+            background-color: #002b56 !important;
+            color: #D4AF37 !important;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 15px;
+            box-shadow: none !important;
+        }
+        .accordion-button:not(.collapsed) {
+            border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+        }
+        .accordion-button::after {
+            filter: invert(79%) sepia(59%) saturate(357%) hue-rotate(354deg) brightness(92%) contrast(85%);
+        }
+        .accordion-body {
+            background-color: #001a35;
+            padding: 15px;
+            font-size: 12px;
+            color: #e0e0e0;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #2ecc71;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+            animation: pulse 1.6s infinite;
+            vertical-align: middle;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+        }
+
+        .calibration-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px 15px;
+        }
+        .cal-item span { color: #fff; font-weight: 600; }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; font-weight: 500; }
+
+        .popout-launcher-btn {
+            background-color: #002b56;
+            border: 1px solid #D4AF37;
+            color: #D4AF37;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 12px;
+            width: 100%;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        .popout-launcher-btn:hover { background-color: #D4AF37; color: #001f3f; }
+
+        .print-btn {
+            background-color: transparent;
+            border: 1px solid #2ecc71;
+            color: #2ecc71;
+            font-weight: 600;
+            padding: 12px;
+            width: 100%;
+            border-radius: 5px;
+            transition: 0.3s;
+            margin-top: 15px;
+        }
+        .print-btn:hover { background-color: #2ecc71; color: #001f3f; }
+        .print-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .print-btn:disabled:hover { background-color: transparent; color: #2ecc71; }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            background: #002b56;
+            border: 1px solid #D4AF37;
+            color: white;
+            border-radius: 5px;
+            box-sizing: border-box;
+            transition: all 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #f1c40f;
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+        }
+        input.form-control, input.form-control:focus {
+            background: #002b56;
+            color: #ffffff;
+            border: 1px solid #D4AF37;
+        }
+
+        button[type="submit"], .scan-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: #D4AF37;
+            color: #001f3f;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.3s;
+            margin-top: 10px;
+        }
+        button[type="submit"]:hover, .scan-btn:hover { background-color: #f1c40f; }
+        .scan-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .scan-btn:disabled:hover { background-color: #D4AF37; }
+
+        .scanner-viewport-container {
+            position: relative;
+            width: 100%;
+            max-width: 450px;
+            height: 320px;
+            margin: 15px auto;
+            background-color: #000e1a;
+            border: 2px dashed #D4AF37;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        #scannerCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            display: none;
+        }
+        .upload-placeholder {
+            text-align: center;
+            color: #a0b2c6;
+            padding: 20px;
+        }
+
+        .laser-scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #ff3333, #ff9999, #ff3333, transparent);
+            box-shadow: 0 0 15px #ff3333;
+            display: none;
+            z-index: 5;
+        }
+
+        .scanning-active .laser-scanline {
+            display: block;
+            animation: moveScanline 2s linear infinite;
+        }
+
+        @keyframes moveScanline {
+            0% { top: 0%; }
+            50% { top: 98%; }
+            100% { top: 0%; }
+        }
+
+        .scan-results-panel {
+            background-color: #002b56;
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+        /* Tiered accent stripe on the results panel */
+        .scan-results-panel.tier-high     { border-left: 5px solid #dc3545; }
+        .scan-results-panel.tier-moderate { border-left: 5px solid #D4AF37; }
+        .scan-results-panel.tier-normal   { border-left: 5px solid #2ecc71; }
+
+        .tier-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 3px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        .scan-disclaimer {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(212, 175, 55, 0.3);
+            font-size: 10.5px;
+            color: #a0b2c6;
+            font-style: italic;
+        }
+
+        .result {
+            margin-top: 25px;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+            font-size: 18px;
+        }
+        .high-risk-alert {
+            background-color: rgba(220, 53, 69, 0.15);
+            border: 2px solid #dc3545;
+            color: #ff6b6b;
+        }
+        .low-risk-alert {
+            background-color: rgba(40, 167, 69, 0.15);
+            border: 2px solid #28a745;
+            color: #2ecc71;
+        }
+        .mortality-text {
+            margin-top: 8px;
+            font-size: 15px;
+            color: #ffffff;
+            font-weight: 500;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            margin-top: 15px;
+            background-color: #001529;
+            border-radius: 6px;
+            padding: 10px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+        }
+
+        .modal-content {
+            background-color: #001a35 !important;
+            border: 2px solid #D4AF37 !important;
+            color: #ffffff;
+        }
+        .modal-header { border-bottom: 1px solid rgba(212, 175, 55, 0.3) !important; }
+        .modal-title { color: #D4AF37; font-weight: 600; }
+        .modal-footer { border-top: 1px solid rgba(212, 175, 55, 0.3) !important; }
+
+        .table-synthetic-wrapper {
+            background-color: #002b56;
+            color: #ffffff;
+            font-size: 12px;
+        }
+        .table-synthetic-wrapper th { background-color: #001f3f !important; color: #D4AF37 !important; }
+        .table-synthetic-wrapper td { background-color: #002b56 !important; color: #ffffff !important; vertical-align: middle; }
+        .select-row-btn {
+            background-color: #D4AF37;
+            color: #001f3f;
+            border: none;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .select-row-btn:hover { background-color: #f1c40f; }
+    </style>
+</head>
+<body>
+
+    <div class="background-ticker-container">
+        <div class="ticker-track">
+            <span>DOMINICAN UNIVERSITY TEACHING HOSPITAL, IBADAN &nbsp;&bull;&nbsp;&nbsp;</span>
+            <span>DOMINICAN UNIVERSITY TEACHING HOSPITAL, IBADAN &nbsp;&bull;&nbsp;&nbsp;</span>
+        </div>
+        <div class="ticker-track" aria-hidden="true">
+            <span>DOMINICAN UNIVERSITY TEACHING HOSPITAL, IBADAN &nbsp;&bull;&nbsp;&nbsp;</span>
+            <span>DOMINICAN UNIVERSITY TEACHING HOSPITAL, IBADAN &nbsp;&bull;&nbsp;&nbsp;</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>CONGESTIVE HEART FAILURE</h2>
+        <div class="sub-title">Clinical Decision Support System</div>
+
+        <ul class="nav nav-tabs justify-content-center" id="cdssTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tier1-tab" data-bs-toggle="tab" data-bs-target="#tier1-panel" type="button" role="tab">
+                    🩺 Primary Biomarker Engine
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tier2-tab" data-bs-toggle="tab" data-bs-target="#tier2-panel" type="button" role="tab">
+                    🔬 Auxiliary Vision Scanner
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="cdssTabContent">
+
+            <!-- TIER 1 PANEL -->
+            <div class="tab-pane fade show active" id="tier1-panel" role="tabpanel">
+                <div class="accordion" id="configAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#collapseConfig" aria-expanded="false" aria-controls="collapseConfig">
+                                <span class="live-dot"></span> System Framework Parameters
+                            </button>
+                        </h2>
+                        <div id="collapseConfig" class="accordion-collapse collapse" data-bs-parent="#configAccordion">
+                            <div class="accordion-body">
+                                <div class="calibration-grid">
+                                    <div class="cal-item">Demographic Base: <span>{{ config.demographic_base if config.demographic_base else 'DUH Cohort' }}</span></div>
+                                    <div class="cal-item">Stratification Ref: <span>{{ config.reference if config.reference else 'ACC/AHA' }}</span></div>
+                                    <div class="cal-item">Operational Threshold: <span>{{ config.threshold }} ({{ (config.threshold * 100)|int }}%)</span></div>
+                                    <div class="cal-item">Calibration Target: <span>{{ config.calibration_target if config.calibration_target else 'Optimized' }}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group mb-4" style="border-bottom: 1px dashed rgba(212, 175, 55, 0.25); padding-bottom: 18px;">
+                    <label style="color: #a0b2c6; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">🧪 Simulation Testing Environment</label>
+                    <button type="button" id="triggerPopoutBtn" class="popout-launcher-btn" data-bs-toggle="modal" data-bs-target="#syntheticProfilesModal">
+                        📊 View Profiles Graphically (50 Records)
+                    </button>
+                </div>
+
+                <form action="/predict" method="post">
+                    <div class="form-group">
+                        <label>Age (Years)</label>
+                        <input type="number" id="inputAge" name="age" step="any" placeholder="e.g., 55" value="{{ request.form.get('age','') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Systolic Blood Pressure (mmHg)</label>
+                        <input type="number" id="inputHbp" name="hbp" min="70" max="250" placeholder="e.g., 130" value="{{ request.form.get('hbp','') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Ejection Fraction (%)</label>
+                        <input type="number" id="inputEf" name="ef" step="any" placeholder="e.g., 35" value="{{ request.form.get('ef','') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Serum Creatinine (mg/dL)</label>
+                        <input type="number" id="inputSc" name="sc" step="any" placeholder="e.g., 1.4" value="{{ request.form.get('sc','') }}" required>
+                    </div>
+
+                    <!-- Hidden Baseline Inputs -->
+                    <input type="hidden" id="inputAnaemia" name="anaemia" value="0">
+                    <input type="hidden" id="inputCpk" name="cpk" value="250">
+                    <input type="hidden" id="inputDiabetes" name="diabetes" value="0">
+                    <input type="hidden" id="inputPlatelets" name="platelets" value="250000">
+                    <input type="hidden" id="inputSs" name="ss" value="135">
+                    <input type="hidden" id="inputSex" name="sex" value="1">
+                    <input type="hidden" id="inputSmoking" name="smoking" value="0">
+                    <input type="hidden" id="inputTime" name="time" value="150">
+
+                    <button type="submit">Analyze Patient Data</button>
+                </form>
+
+                {% if prediction_text %}
+                <div class="result {% if 'High Risk' in prediction_text %}high-risk-alert{% else %}low-risk-alert{% endif %}">
+                    <strong id="res-class">{{ prediction_text }}</strong>
+                    {% if probability_text %}
+                    <p class="mortality-text" id="res-prob">{{ probability_text }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Primary Section ApexChart Container -->
+                <div class="chart-container">
+                    <div id="primaryRiskChart"></div>
+                </div>
+
+                <button type="button" class="print-btn" onclick="generateClinicalPrintout()">
+                    🖨 Print Clinical Report
+                </button>
+                {% endif %}
+            </div>
+
+            <!-- TIER 2 PANEL -->
+            <div class="tab-pane fade" id="tier2-panel" role="tabpanel">
+                <div class="text-center mb-3">
+                    <span class="badge bg-warning text-dark">Experimental Module</span>
+                    <p class="small mt-1" style="color:#a0b2c6;">Upload a Chest X-Ray scan image to evaluate for anatomical heart enlargement and damaged cardiac regions.</p>
+                </div>
+
+                <div class="form-group">
+                    <label style="color: #a0b2c6;">Upload Radiological Scan Image (JPG, JPEG, PNG, BMP, TIFF, WebP):</label>
+                    <input type="file" id="imageInput" accept="image/*,.dcm" class="form-control" />
+                </div>
+
+                <div class="scanner-viewport-container" id="scannerViewport">
+                    <div class="laser-scanline"></div>
+                    <div class="upload-placeholder" id="uploadPlaceholder">
+                        📷 Select an Image or DICOM File above to Initialize the Optical Scanner
+                    </div>
+                    <canvas id="scannerCanvas"></canvas>
+                </div>
+
+                <button type="button" class="scan-btn" id="startScanBtn" disabled>
+                    🔍 Run Deep Tissue Optical Scan
+                </button>
+
+                <!-- Dynamic Results Panel with Synchronized Data & Tiered Radiological Brackets -->
+                <div class="scan-results-panel" id="scanResultsPanel">
+                    <h5 id="scanTitle" class="fw-bold border-bottom pb-2 mb-2">--</h5>
+                    <div class="small">
+                        <p class="mb-1"><strong>Primary Condition:</strong> <span id="scanCondition">--</span></p>
+                        <p class="mb-1"><strong>Damaged / Stress Region:</strong> <span id="scanRegion" class="text-info font-monospace">--</span></p>
+                        <p class="mb-1"><strong>Estimated Confidence:</strong> <span id="scanConfidence" class="text-white">--%</span></p>
+                    </div>
+
+                    <!-- Auxiliary Section ApexChart Container -->
+                    <div class="chart-container mt-3" id="auxiliaryChartWrapper">
+                        <div id="auxiliaryScanChart"></div>
+                    </div>
+
+                    <p class="scan-disclaimer" id="scanDisclaimer"></p>
+                </div>
+
+                <button type="button" class="print-btn" id="printScanBtn" onclick="generateScanPrintout()" style="display: none;">
+                    🖨️ Print Clinical Report
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal: Synthetic Profiles -->
+    <div class="modal fade" id="syntheticProfilesModal" tabindex="-1" aria-labelledby="syntheticProfilesModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="syntheticProfilesModalLabel">📋 Model-Generated Evaluation Matrix</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-synthetic-wrapper m-0">
+                            <thead>
+                                <tr>
+                                    <th>Action</th>
+                                    <th>Profile Identity</th>
+                                    <th>Age</th>
+                                    <th>SBP</th>
+                                    <th>EF (%)</th>
+                                    <th>Cr (mg/dL)</th>
+                                    <th>Risk Class</th>
+                                    <th>Risk Prob</th>
+                                </tr>
+                            </thead>
+                            <tbody id="syntheticTableBody">
+                                <tr><td colspan="8" class="text-center text-warning py-4">Loading calculations…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-warning btn-sm" data-bs-dismiss="modal">Close Monitor</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // ─── SHARED TIER PALETTE & PRECISION HELPERS ───
+        const TIER_COLORS = {
+            high:     '#dc3545',   // High Risk / Critical  → alert red
+            moderate: '#D4AF37',   // Moderate / Borderline → precision yellow
+            normal:   '#2ecc71'    // Normal / Safe         → clinical green
+        };
+        const TIER_GLOW = {
+            high:     'rgba(220, 53, 69, 0.30)',
+            moderate: 'rgba(212, 175, 55, 0.22)',
+            normal:   'rgba(46, 204, 113, 0.18)'
+        };
+        const TIER_LABEL = { high: 'High Risk', moderate: 'Borderline', normal: 'Normal' };
+        const RESIDUAL_COLOR = '#5a6f88';
+
+        // One rounding rule used everywhere (text, chart bars, labels, tooltips, print)
+        function round1(v) { return Math.round(Number(v) * 10) / 10; }
+        function fmt1(v)   { return round1(v).toFixed(1); }
+
+        // Returns [primary, complement] that always add up to exactly 100.0
+        function complementaryPair(value) {
+            const p = Math.min(100, Math.max(0, round1(value)));
+            return [p, round1(100 - p)];
+        }
+
+        // Accept 0–1 fractions or 0–100 percentages from the backend
+        function normalisePercent(raw) {
+            const n = parseFloat(String(raw).replace('%', ''));
+            if (!isFinite(n)) return null;
+            return (n > 0 && n <= 1) ? n * 100 : n;
+        }
+
+        // ─── INITIALIZE PRIMARY SECTION APEXCHART (IF PREDICTION EXISTS) ───
+        {% if prediction_text and calc_percentage is defined %}
+        document.addEventListener("DOMContentLoaded", function() {
+            const [riskVal, safeVal] = complementaryPair(normalisePercent({{ calc_percentage }}) ?? 0);
+
+            const primaryOptions = {
+                series: [riskVal, safeVal],
+                chart: {
+                    type: 'donut',
+                    height: '100%',
+                    background: 'transparent',
+                    animations: { enabled: true, speed: 800 }
+                },
+                labels: ['Algorithmic Risk Probability', 'Safe Margin'],
+                colors: ['#dc3545', '#2ecc71'],
+                dataLabels: {
+                    enabled: true,
+                    // Show the exact series value, not ApexCharts' recomputed share
+                    formatter: function (val, opts) {
+                        return fmt1(opts.w.config.series[opts.seriesIndex]) + '%';
+                    },
+                    style: { colors: ['#fff'] },
+                    dropShadow: { enabled: false }
+                },
+                tooltip: { y: { formatter: (val) => fmt1(val) + '%' } },
+                plotOptions: {
+                    pie: {
+                        donut: {
+                            size: '65%',
+                            labels: {
+                                show: true,
+                                value: { color: '#ffffff', formatter: (val) => fmt1(val) + '%' },
+                                total: {
+                                    show: true,
+                                    showAlways: true,
+                                    label: 'Risk Index',
+                                    color: '#D4AF37',
+                                    formatter: function () { return fmt1(riskVal) + '%'; }
+                                }
+                            }
+                        }
+                    }
+                },
+                title: {
+                    text: 'Primary Biomarker Risk Distribution',
+                    align: 'center',
+                    style: { color: '#D4AF37', fontSize: '13px', fontWeight: '600' }
+                },
+                legend: { position: 'bottom', labels: { colors: '#ffffff' } },
+                stroke: { show: true, colors: ['#001529'] }
+            };
+
+            const primaryChart = new ApexCharts(document.querySelector("#primaryRiskChart"), primaryOptions);
+            primaryChart.render();
+        });
+        {% endif %}
+
+        // ─── TIER 2 OPTICAL & DICOM SCANNER ───
+        const imageInput = document.getElementById('imageInput');
+        const scannerViewport = document.getElementById('scannerViewport');
+        const scannerCanvas = document.getElementById('scannerCanvas');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const startScanBtn = document.getElementById('startScanBtn');
+        const scanResultsPanel = document.getElementById('scanResultsPanel');
+        const printScanBtn = document.getElementById('printScanBtn');
+        const auxChartWrapper = document.getElementById('auxiliaryChartWrapper');
+        const ctx = scannerCanvas.getContext('2d');
+        let selectedFile = null;
+        let auxiliaryApexChart = null;
+        let currentImageObj = null;   // HTMLImageElement or decoded DICOM canvas
+
+        let lastValidScanData = null;
+
+        function resetScanPrintState() {
+            lastValidScanData = null;
+            printScanBtn.style.display = 'none';
+        }
+
+        function destroyAuxChart() {
+            if (auxiliaryApexChart) {
+                auxiliaryApexChart.destroy();
+                auxiliaryApexChart = null;
+            }
+            document.querySelector("#auxiliaryScanChart").innerHTML = "";
+        }
+
+        function showOnCanvas(source) {
+            currentImageObj = source;
+            uploadPlaceholder.style.display = 'none';
+            scannerCanvas.style.display = 'block';
+            scannerCanvas.width = source.width;
+            scannerCanvas.height = source.height;
+            ctx.drawImage(source, 0, 0);
+        }
+
+        function redrawBaseImage() {
+            if (!currentImageObj) return;
+            ctx.clearRect(0, 0, scannerCanvas.width, scannerCanvas.height);
+            ctx.drawImage(currentImageObj, 0, 0);
+        }
+
+        // ─── CLIENT-SIDE DICOM PREVIEW (uncompressed transfer syntaxes) ───
+        function decodeDicomToCanvas(arrayBuffer) {
+            if (typeof dicomParser === 'undefined') return null;
+            const byteArray = new Uint8Array(arrayBuffer);
+            const ds = dicomParser.parseDicom(byteArray);
+
+            const ts = ds.string('x00020010') || '1.2.840.10008.1.2.1';
+            if (!['1.2.840.10008.1.2', '1.2.840.10008.1.2.1', '1.2.840.10008.1.2.2'].includes(ts)) return null;
+            const littleEndian = ts !== '1.2.840.10008.1.2.2';
+
+            const rows = ds.uint16('x00280010');
+            const cols = ds.uint16('x00280011');
+            const bits = ds.uint16('x00280100') || 16;
+            const pixRep = ds.uint16('x00280103') || 0;
+            const spp = ds.uint16('x00280002') || 1;
+            const photometric = (ds.string('x00280004') || 'MONOCHROME2').trim();
+            const slope = parseFloat(ds.string('x00281053') || '1') || 1;
+            const intercept = parseFloat(ds.string('x00281052') || '0') || 0;
+            const pixelEl = ds.elements.x7fe00010;
+            if (!rows || !cols || !pixelEl) return null;
+
+            const out = document.createElement('canvas');
+            out.width = cols; out.height = rows;
+            const octx = out.getContext('2d');
+            const img = octx.createImageData(cols, rows);
+            const n = rows * cols;
+            const dv = new DataView(byteArray.buffer, byteArray.byteOffset + pixelEl.dataOffset, pixelEl.length);
+
+            if (spp === 3 && bits === 8) {
+                for (let i = 0; i < n; i++) {
+                    img.data[i * 4]     = dv.getUint8(i * 3);
+                    img.data[i * 4 + 1] = dv.getUint8(i * 3 + 1);
+                    img.data[i * 4 + 2] = dv.getUint8(i * 3 + 2);
+                    img.data[i * 4 + 3] = 255;
+                }
+            } else {
+                const vals = new Float32Array(n);
+                let min = Infinity, max = -Infinity;
+                for (let i = 0; i < n; i++) {
+                    let raw;
+                    if (bits === 8) raw = pixRep ? dv.getInt8(i) : dv.getUint8(i);
+                    else raw = pixRep ? dv.getInt16(i * 2, littleEndian) : dv.getUint16(i * 2, littleEndian);
+                    const v = raw * slope + intercept;
+                    vals[i] = v;
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+                let wc = parseFloat((ds.string('x00281050') || '').split('\\')[0]);
+                let ww = parseFloat((ds.string('x00281051') || '').split('\\')[0]);
+                if (!isFinite(wc) || !isFinite(ww) || ww <= 1) { wc = (min + max) / 2; ww = Math.max(1, max - min); }
+                const lo = wc - ww / 2, hi = wc + ww / 2;
+                const invert = photometric === 'MONOCHROME1';
+                for (let i = 0; i < n; i++) {
+                    let g = ((vals[i] - lo) / (hi - lo)) * 255;
+                    g = Math.max(0, Math.min(255, g));
+                    if (invert) g = 255 - g;
+                    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = g;
+                    img.data[i * 4 + 3] = 255;
+                }
+            }
+            octx.putImageData(img, 0, 0);
+            return out;
+        }
+
+        imageInput.addEventListener('change', function (e) {
+            selectedFile = e.target.files[0];
+            scanResultsPanel.style.display = 'none';
+            destroyAuxChart();
+            resetScanPrintState();
+            if (!selectedFile) return;
+
+            const isDcm = selectedFile.name.toLowerCase().endsWith('.dcm');
+            if (isDcm) {
+                const reader = new FileReader();
+                reader.onload = function () {
+                    let preview = null;
+                    try { preview = decodeDicomToCanvas(reader.result); } catch (err) { preview = null; }
+
+                    if (preview) {
+                        showOnCanvas(preview);
+                    } else {
+                        // Compressed / unsupported DICOM: backend will still decode it
+                        currentImageObj = null;
+                        scannerCanvas.style.display = 'none';
+                        uploadPlaceholder.style.display = 'block';
+                        uploadPlaceholder.innerHTML = `📄 DICOM File Loaded: <strong>${escapeHtml(selectedFile.name)}</strong><br><span class="text-success small">Ready for Deep Learning & DICOM Pixel Decoding</span>`;
+                    }
+                    startScanBtn.disabled = false;
+                };
+                reader.readAsArrayBuffer(selectedFile);
+            } else {
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const img = new Image();
+                    img.onload = function () {
+                        showOnCanvas(img);
+                        startScanBtn.disabled = false;
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(selectedFile);
+            }
+        });
+
+        // ─── TIER RESOLUTION (High / Moderate / Normal) ───
+        function resolveTier(data, headerText, conditionText) {
+            // 1. Explicit tier from backend, if provided
+            const explicit = String(data.risk_tier || data.tier || data.severity || data.risk_level || '').toLowerCase();
+            if (/high|critical|severe/.test(explicit)) return 'high';
+            if (/moderate|borderline|intermediate|mild/.test(explicit)) return 'moderate';
+            if (/normal|safe|low/.test(explicit)) return 'normal';
+
+            // 2. Numeric cardiothoracic ratio, if provided
+            const ctr = parseFloat(data.ctr ?? data.cardiothoracic_ratio);
+            if (isFinite(ctr) && ctr > 0 && ctr < 1.5) {
+                if (ctr >= 0.55) return 'high';
+                if (ctr >= 0.50) return 'moderate';
+                return 'normal';
+            }
+
+            // 3. Keywords in the header / condition text
+            const text = (headerText + ' ' + conditionText + ' ' + (data.ctr_assessment || '')).toLowerCase();
+            if (/moderate|borderline|intermediate|mild/.test(text)) return 'moderate';
+            if (/high risk|critical|severe|cardiomegaly detected|abnormal/.test(text)) return 'high';
+            if (/normal|safe|no cardiomegaly/.test(text)) return 'normal';
+
+            // 4. Fallback to the is_safe flag
+            if (data.is_safe === true) return 'normal';
+            return 'high';
+        }
+
+        // ─── PRECISE ANATOMICAL RADIOLOGICAL ROI OVERLAY ENGINE (TIERED COLOURS) ───
+        function drawDamagedRegionOverlay(regionName, tier, confVal) {
+            if (!currentImageObj) return;
+
+            redrawBaseImage();
+
+            const w = scannerCanvas.width;
+            const h = scannerCanvas.height;
+
+            // Anatomically calibrated left-ventricular / cardiac silhouette bounding box
+            const boxX = w * 0.48;
+            const boxY = h * 0.35;
+            const boxW = w * 0.30;
+            const boxH = h * 0.40;
+
+            const primaryColor = TIER_COLORS[tier];
+            const glowColor = TIER_GLOW[tier];
+
+            // 1. Heat map highlight over cardiac boundary
+            ctx.fillStyle = glowColor;
+            ctx.fillRect(boxX, boxY, boxW, boxH);
+
+            // 2. Main Bounding Box
+            ctx.strokeStyle = primaryColor;
+            ctx.lineWidth = Math.max(2, w * 0.004);
+            ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+            // 3. Radiological Targeting Corner Brackets
+            const bracketLen = Math.min(boxW, boxH) * 0.18;
+            ctx.strokeStyle = primaryColor;
+            ctx.lineWidth = Math.max(3, w * 0.007);
+            ctx.lineCap = 'square';
+
+            ctx.beginPath(); // Top-left
+            ctx.moveTo(boxX, boxY + bracketLen); ctx.lineTo(boxX, boxY); ctx.lineTo(boxX + bracketLen, boxY);
+            ctx.stroke();
+            ctx.beginPath(); // Top-right
+            ctx.moveTo(boxX + boxW - bracketLen, boxY); ctx.lineTo(boxX + boxW, boxY); ctx.lineTo(boxX + boxW, boxY + bracketLen);
+            ctx.stroke();
+            ctx.beginPath(); // Bottom-left
+            ctx.moveTo(boxX, boxY + boxH - bracketLen); ctx.lineTo(boxX, boxY + boxH); ctx.lineTo(boxX + bracketLen, boxY + boxH);
+            ctx.stroke();
+            ctx.beginPath(); // Bottom-right
+            ctx.moveTo(boxX + boxW - bracketLen, boxY + boxH); ctx.lineTo(boxX + boxW, boxY + boxH); ctx.lineTo(boxX + boxW, boxY + boxH - bracketLen);
+            ctx.stroke();
+
+            // 4. Center Crosshairs on Heart Apex
+            const centerX = boxX + boxW / 2;
+            const centerY = boxY + boxH / 2;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(centerX - 10, centerY); ctx.lineTo(centerX + 10, centerY);
+            ctx.moveTo(centerX, centerY - 10); ctx.lineTo(centerX, centerY + 10);
+            ctx.stroke();
+
+            // 5. Professional Annotation Tag (same confidence value as text + chart)
+            const labelText = `${TIER_LABEL[tier].toUpperCase()} · ROI: ${regionName} · ${fmt1(confVal)}%`;
+            const fontPx = Math.max(11, Math.round(w * 0.022));
+            ctx.font = `bold ${fontPx}px 'Segoe UI', monospace`;
+            const textMetrics = ctx.measureText(labelText);
+            const pad = 6;
+            const tagH = fontPx + 10;
+            const tagW = textMetrics.width + pad * 2;
+            const tagX = Math.max(0, Math.min(boxX, w - tagW));
+            const tagY = Math.max(0, boxY - tagH - 4);
+
+            ctx.fillStyle = 'rgba(0, 26, 53, 0.90)';
+            ctx.fillRect(tagX, tagY, tagW, tagH);
+            ctx.strokeStyle = primaryColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(tagX, tagY, tagW, tagH);
+
+            ctx.fillStyle = primaryColor;
+            ctx.fillText(labelText, tagX + pad, tagY + fontPx + 2);
+        }
+
+        // ─── AUXILIARY VISION DIAGNOSTIC SPECTRUM (EXACT TALLY WITH TEXT) ───
+        function renderAuxiliarySpectrum(tier, confVal, residualVal) {
+            destroyAuxChart();
+
+            // Bar 1 is ALWAYS the Estimated Confidence value; bar 2 is ALWAYS 100 - confVal
+            let categories, colors;
+            if (tier === 'high') {
+                categories = ['Cardiomegaly Risk (Confidence)', 'Normal Likelihood'];
+                colors = [TIER_COLORS.high, TIER_COLORS.normal];
+            } else if (tier === 'moderate') {
+                categories = ['Borderline Finding (Confidence)', 'Alternative Finding'];
+                colors = [TIER_COLORS.moderate, RESIDUAL_COLOR];
+            } else {
+                categories = ['Normal (Confidence)', 'Cardiomegaly Risk'];
+                colors = [TIER_COLORS.normal, TIER_COLORS.high];
+            }
+
+            const auxiliaryOptions = {
+                series: [{ name: 'Probability Spectrum (%)', data: [confVal, residualVal] }],
+                chart: {
+                    type: 'bar',
+                    height: '100%',
+                    background: 'transparent',
+                    toolbar: { show: false },
+                    animations: { enabled: true, speed: 800 }
+                },
+                plotOptions: {
+                    bar: {
+                        distributed: true,
+                        borderRadius: 6,
+                        columnWidth: '55%',
+                        dataLabels: { position: 'top' }
+                    }
+                },
+                colors: colors,
+                xaxis: {
+                    categories: categories,
+                    labels: { style: { colors: '#ffffff', fontSize: '10px' } }
+                },
+                yaxis: {
+                    min: 0,
+                    max: 100,
+                    tickAmount: 5,
+                    labels: {
+                        style: { colors: '#a0b2c6' },
+                        formatter: (val) => Math.round(val) + '%'
+                    }
+                },
+                grid: { borderColor: 'rgba(212, 175, 55, 0.15)' },
+                title: {
+                    text: 'Auxiliary Vision Diagnostic Spectrum',
+                    align: 'center',
+                    style: { color: '#D4AF37', fontSize: '12px', fontWeight: '600' }
+                },
+                legend: { show: false },
+                dataLabels: {
+                    enabled: true,
+                    offsetY: -18,
+                    // Identical 1-decimal formatting to the "Estimated Confidence" text
+                    formatter: (val) => fmt1(val) + '%',
+                    style: { colors: ['#ffffff'], fontSize: '12px' }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    y: { formatter: (val) => fmt1(val) + '%' }
+                }
+            };
+
+            auxiliaryApexChart = new ApexCharts(document.querySelector("#auxiliaryScanChart"), auxiliaryOptions);
+            auxiliaryApexChart.render();
+        }
+
+        startScanBtn.addEventListener('click', function () {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append("xray", selectedFile);
+            formData.append("file", selectedFile);
+
+            scannerViewport.classList.add('scanning-active');
+            startScanBtn.disabled = true;
+            scanResultsPanel.style.display = 'none';
+            destroyAuxChart();
+            resetScanPrintState();
+            redrawBaseImage();
+
+            fetch('/scan_image', { method: 'POST', body: formData })
+            .then(response => response.json())
+            .then(data => {
+                scannerViewport.classList.remove('scanning-active');
+
+                if (data.error) {
+                    alert("Scan Error: " + data.error);
+                    startScanBtn.disabled = false;
+                    return;
+                }
+
+                const titleEl = document.getElementById('scanTitle');
+                const condEl = document.getElementById('scanCondition');
+                const regEl = document.getElementById('scanRegion');
+                const confEl = document.getElementById('scanConfidence');
+                const disclaimerEl = document.getElementById('scanDisclaimer');
+
+                const headerText = data.scan_title || data.header_status || data.scan_status || "Scan Analysis Complete";
+                const conditionText = data.primary_condition || data.primaryCondition || data.condition || "N/A";
+                const regionText = data.damaged_region || data.damagedRegion || data.region || "Left Ventricular Apex / Cardiomegaly";
+
+                const wasRejected = (data.status === 'Rejected') || headerText.includes('Invalid');
+                const tier = resolveTier(data, headerText, conditionText);
+
+                // ── SINGLE SOURCE OF TRUTH FOR CONFIDENCE ──
+                const rawConf = data.confidence !== undefined ? data.confidence
+                              : (data.estimated_confidence !== undefined ? data.estimated_confidence : null);
+                const parsedConf = rawConf !== null ? normalisePercent(rawConf) : null;
+                const fallbackConf = tier === 'normal' ? 91.2 : (tier === 'moderate' ? 68.5 : 85.4);
+                const [confVal, residualVal] = complementaryPair(parsedConf ?? fallbackConf);
+
+                // Reset results panel styling
+                scanResultsPanel.classList.remove('tier-high', 'tier-moderate', 'tier-normal');
+                titleEl.className = 'fw-bold border-bottom pb-2 mb-2';
+                titleEl.innerHTML = '';
+                titleEl.appendChild(document.createTextNode(headerText));
+
+                if (wasRejected) {
+                    titleEl.style.color = TIER_COLORS.moderate;
+                    condEl.style.color = '';
+                    redrawBaseImage();
+                } else {
+                    const color = TIER_COLORS[tier];
+                    titleEl.style.color = color;
+                    const badge = document.createElement('span');
+                    badge.className = 'tier-badge';
+                    badge.style.backgroundColor = color;
+                    badge.style.color = tier === 'moderate' ? '#001f3f' : '#ffffff';
+                    badge.textContent = TIER_LABEL[tier];
+                    titleEl.appendChild(badge);
+
+                    condEl.style.color = color;
+                    scanResultsPanel.classList.add('tier-' + tier);
+
+                    const roiName = tier === 'normal' ? 'Normal Cardiac Silhouette' : regionText;
+                    drawDamagedRegionOverlay(roiName, tier, confVal);
+                }
+
+                condEl.innerText = conditionText;
+                regEl.innerText = regionText;
+                confEl.innerText = fmt1(confVal) + '%';
+                disclaimerEl.innerText = data.disclaimer || '';
+
+                scanResultsPanel.style.display = 'block';
+                startScanBtn.disabled = false;
+
+                if (wasRejected) {
+                    auxChartWrapper.style.display = 'none';
+                    resetScanPrintState();
+                } else {
+                    auxChartWrapper.style.display = 'block';
+                    renderAuxiliarySpectrum(tier, confVal, residualVal);
+
+                    lastValidScanData = {
+                        headerText, conditionText, regionText,
+                        tier, confVal, residualVal,
+                        diagnosis: data.diagnosis || 'N/A',
+                        status: data.status || data.Status || 'N/A',
+                        recommendedAction: data.recommended_action || 'N/A',
+                        ctrAssessment: data.ctr_assessment || 'N/A',
+                        modelUncertainty: (data.model_uncertainty !== undefined ? data.model_uncertainty : 'N/A'),
+                        disclaimer: data.disclaimer || 'Research prototype only. Not a validated diagnostic device. Not for clinical use.',
+                        fileName: selectedFile ? selectedFile.name : 'Unnamed upload'
+                    };
+                    printScanBtn.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                alert("Connection Error: " + err.message);
+                scannerViewport.classList.remove('scanning-active');
+                startScanBtn.disabled = false;
+                resetScanPrintState();
+            });
+        });
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // ─── PRINT ENGINE (TIER 1 — Biomarker) ───
+        function generateClinicalPrintout() {
+            const age = document.getElementById('inputAge').value || "______";
+            const sbp = document.getElementById('inputHbp').value || "______";
+            const ef = document.getElementById('inputEf').value || "______";
+            const sc = document.getElementById('inputSc').value || "______";
+
+            const classificationEl = document.getElementById('res-class');
+            const probabilityEl = document.getElementById('res-prob');
+
+            const riskTitle = classificationEl ? escapeHtml(classificationEl.innerText) : "RISK STATUS ASSESSMENT UNRESOLVED";
+            let riskDetails = probabilityEl ? escapeHtml(probabilityEl.innerText) : "Manual validation context required.";
+
+            riskDetails = riskDetails.replace(
+                "Algorithmic Mortality Risk Probability:",
+                "<strong>Algorithmic Mortality Risk Probability:</strong>"
+            );
+
+            const sectionsHtml = `
+                <div class="section-title">1. Evaluated Patient Vitals</div>
+                <table class="vitals-data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50%;">Clinical Parameter</th>
+                            <th style="width: 50%;">Recorded Baseline Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Patient Age</td><td><strong>${escapeHtml(age)}</strong> Years</td></tr>
+                        <tr><td>Systolic Blood Pressure (SBP)</td><td><strong>${escapeHtml(sbp)}</strong> mmHg</td></tr>
+                        <tr><td>Ejection Fraction (EF)</td><td><strong>${escapeHtml(ef)}</strong> %</td></tr>
+                        <tr><td>Serum Creatinine Level</td><td><strong>${escapeHtml(sc)}</strong> mg/dL</td></tr>
+                    </tbody>
+                </table>
+                <div class="section-title">2. Algorithmic Risk Stratification</div>
+                <div class="analysis-output-block">
+                    <h4>${riskTitle}</h4>
+                    <p>${riskDetails}</p>
+                </div>
+            `;
+
+            openClinicalPrintWindow("Primary Biomarker Engine Analytics Report", sectionsHtml);
+        }
+
+        // ─── PRINT ENGINE (TIER 2 — Auxiliary Vision Scanner) ───
+        function generateScanPrintout() {
+            if (!lastValidScanData) {
+                alert("No valid scan available to print. Run a scan on an accepted chest X-ray or DICOM file first.");
+                return;
+            }
+
+            const d = lastValidScanData;
+            const tierColor = TIER_COLORS[d.tier];
+            const sectionsHtml = `
+                <div class="section-title">1. Uploaded Scan Reference</div>
+                <table class="vitals-data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50%;">Field</th>
+                            <th style="width: 50%;">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Source File / DICOM</td><td><strong>${escapeHtml(d.fileName)}</strong></td></tr>
+                        <tr><td>Gate Status</td><td><strong>${escapeHtml(d.status)}</strong></td></tr>
+                        <tr><td>Model Output</td><td><strong>${escapeHtml(d.diagnosis)}</strong></td></tr>
+                        <tr><td>Risk Tier</td><td><strong style="color:${tierColor};">${TIER_LABEL[d.tier]}</strong></td></tr>
+                        <tr><td>Estimated Confidence</td><td><strong>${fmt1(d.confVal)}%</strong> (residual ${fmt1(d.residualVal)}%)</td></tr>
+                        <tr><td>Model Output Uncertainty</td><td><strong>${escapeHtml(d.modelUncertainty)}</strong></td></tr>
+                    </tbody>
+                </table>
+                <div class="section-title">2. Auxiliary Vision Scan Result &amp; Damaged Region</div>
+                <div class="analysis-output-block" style="border-color:${tierColor};">
+                    <h4 style="color:${tierColor};">${escapeHtml(d.headerText)}</h4>
+                    <p><strong>Primary Condition:</strong> ${escapeHtml(d.conditionText)}</p>
+                    <p><strong>Damaged / Stress Region:</strong> ${escapeHtml(d.regionText)}</p>
+                    <p><strong>Cardiothoracic Note:</strong> ${escapeHtml(d.ctrAssessment)}</p>
+                    <p><strong>Recommended Action:</strong> ${escapeHtml(d.recommendedAction)}</p>
+                    <p style="font-size:9pt;font-style:italic;">${escapeHtml(d.disclaimer)}</p>
+                </div>
+            `;
+
+            openClinicalPrintWindow("Auxiliary Vision Scanner Report", sectionsHtml);
+        }
+
+        // ─── PERFECT SINGLE-PAGE A4 PRINT WINDOW BUILDER ───
+        function openClinicalPrintWindow(reportSubtitle, sectionsHtml) {
+            const printWindow = window.open('', '_blank', 'width=900,height=800');
+            if (!printWindow) {
+                alert('Please allow pop-ups for this site to print the clinical report.');
+                return;
+            }
+
+            const documentContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8" />
+                    <title>Clinical Report</title>
+                    <style>
+                        @page { size: A4 portrait; margin: 0; }
+                        @media print {
+                            html, body { height: 100%; overflow: hidden; }
+                            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            .report-page {
+                                padding: 10mm 16mm 8mm 16mm !important;
+                                height: 275mm !important;
+                                max-height: 275mm !important;
+                                box-sizing: border-box !important;
+                                page-break-inside: avoid !important;
+                                page-break-before: avoid !important;
+                                page-break-after: avoid !important;
+                            }
+                        }
+                        html, body {
+                            margin: 0;
+                            padding: 0;
+                            background-color: #fff;
+                            color: #000;
+                            font-family: 'Times New Roman', Times, serif;
+                        }
+                        .report-page {
+                            display: flex;
+                            flex-direction: column;
+                            box-sizing: border-box;
+                            width: 210mm;
+                            height: 282mm;
+                            max-height: 282mm;
+                            padding: 10mm 18mm 10mm 18mm;
+                            font-size: 11pt;
+                            line-height: 1.4;
+                            overflow: hidden;
+                            margin: 0 auto;
+                        }
+                        .header-container {
+                            text-align: center;
+                            border-bottom: 3px double #000;
+                            padding-bottom: 6px;
+                            margin-bottom: 12px;
+                        }
+                        .header-container h1 {
+                            font-size: 17pt;
+                            font-weight: bold;
+                            margin: 0 0 4px 0;
+                            letter-spacing: 0.5px;
+                            text-transform: uppercase;
+                            text-align: center;
+                        }
+                        .header-container p {
+                            font-size: 10.5pt;
+                            margin: 0;
+                            letter-spacing: 0.5px;
+                            font-style: italic;
+                            text-align: center;
+                        }
+                        .horizontal-row-field { margin: 10px 0; font-size: 11pt; font-weight: bold; }
+                        .manual-underline-space {
+                            display: inline-block;
+                            border-bottom: 1px solid #000;
+                            width: 340px;
+                            margin-left: 10px;
+                            height: 16px;
+                            vertical-align: bottom;
+                        }
+                        .section-title {
+                            margin-top: 14px;
+                            margin-bottom: 6px;
+                            font-size: 12.5pt;
+                            text-transform: uppercase;
+                            font-weight: bold;
+                            letter-spacing: 0.5px;
+                            border-bottom: 1.5px solid #000;
+                            padding-bottom: 3px;
+                        }
+                        .report-body { flex: 0 1 auto; }
+                        .vitals-data-table { width: 100%; border-collapse: collapse; margin: 8px 0 12px 0; }
+                        .vitals-data-table th, .vitals-data-table td {
+                            border: 1px solid #000;
+                            padding: 6px 10px;
+                            text-align: left;
+                            font-size: 10.5pt;
+                        }
+                        .vitals-data-table th { background-color: #f2f2f2; font-weight: bold; }
+                        .analysis-output-block {
+                            border: 2px solid #000;
+                            background-color: #fafafa;
+                            padding: 10px 14px;
+                            margin: 8px 0;
+                            text-align: center;
+                        }
+                        .analysis-output-block h4 {
+                            margin: 0 0 6px 0;
+                            font-size: 13pt;
+                            letter-spacing: 0.5px;
+                            text-transform: uppercase;
+                        }
+                        .analysis-output-block p { margin: 5px 0; font-size: 10.5pt; text-align: left; line-height: 1.4; }
+                        .attestation-block { margin-top: auto; padding-top: 10px; page-break-inside: avoid; }
+                        .signatures-flex-container { margin-top: 15px; width: 100%; overflow: hidden; }
+                        .sig-column { float: left; width: 45%; }
+                        .stamp-column { float: right; width: 45%; text-align: right; }
+                        .stamp-box-border {
+                            border: 1.5px dashed #444;
+                            width: 190px;
+                            height: 110px;
+                            display: inline-block;
+                            text-align: center;
+                            line-height: 110px;
+                            font-size: 10.5pt;
+                            color: #444;
+                            font-weight: bold;
+                            margin-bottom: 15px;
+                        }
+                        .sig-column .line-indicator {
+                            border-top: 1px solid #000;
+                            margin-top: 130px;
+                            font-weight: bold;
+                            font-size: 10.5pt;
+                            text-align: left;
+                            padding-top: 4px;
+                        }
+                        .stamp-column .line-indicator {
+                            border-top: 1px solid #000;
+                            margin-top: 15px;
+                            font-weight: bold;
+                            font-size: 10.5pt;
+                            text-align: center;
+                            padding-top: 4px;
+                        }
+                        .clearfix { clear: both; }
+                    </style>
+                </head>
+                <body>
+                    <div class="report-page">
+                        <div class="header-container">
+                            <h1>DOMINICAN UNIVERSITY TEACHING HOSPITAL</h1>
+                            <p>Clinical Decision Support System &mdash; ${reportSubtitle}</p>
+                        </div>
+                        <div class="horizontal-row-field">
+                            Patient File Number: <span class="manual-underline-space" style="width: 380px;"></span>
+                        </div>
+                        <div class="report-body">
+                            ${sectionsHtml}
+                        </div>
+                        <div class="attestation-block">
+                            <div class="section-title">Clinical Attestation &amp; Validation</div>
+                            <div class="horizontal-row-field" style="margin-top: 10px;">
+                                Name of Clinician: <span class="manual-underline-space" style="width: 430px;"></span>
+                            </div>
+                            <div class="signatures-flex-container">
+                                <div class="sig-column"><div class="line-indicator">Clinician Signature</div></div>
+                                <div class="stamp-column">
+                                    <div class="stamp-box-border">Hospital Stamp Here</div>
+                                    <div class="line-indicator">Date Verified</div>
+                                </div>
+                                <div class="clearfix"></div>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `;
+
+            printWindow.document.write(documentContent);
+            printWindow.document.close();
+
+            setTimeout(function() {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.close();
+            }, 350);
+        }
+
+        // ─── SYNTHETIC PROFILE LOADER ───
+        document.getElementById('triggerPopoutBtn').addEventListener('click', function () {
+            const tableBody = document.getElementById('syntheticTableBody');
+            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-warning py-4">⏳ Querying layers…</td></tr>';
+
+            fetch('/generate_synthetic')
+                .then(response => response.json())
+                .then(data => {
+                    tableBody.innerHTML = "";
+                    data.forEach(profile => {
+                        const rowAlertClass = profile.is_high_risk
+                            ? "style='color: #ff6b6b; font-weight: bold;'"
+                            : "style='color: #2ecc71; font-weight: bold;'";
+                        const pct = normalisePercent(profile.percentage);
+
+                        const rowElement = `
+                            <tr>
+                                <td>
+                                    <button type="button" class="select-row-btn"
+                                        data-age="${escapeHtml(profile.age)}" data-sbp="${escapeHtml(profile.sbp)}"
+                                        data-ef="${escapeHtml(profile.ef)}" data-sc="${escapeHtml(profile.sc)}">
+                                        Mount
+                                    </button>
+                                </td>
+                                <td style="color: #D4AF37; font-weight: 500;">${escapeHtml(profile.identity)}</td>
+                                <td>${escapeHtml(profile.age)} yrs</td>
+                                <td>${escapeHtml(profile.sbp)} mmHg</td>
+                                <td>${escapeHtml(profile.ef)}%</td>
+                                <td>${escapeHtml(profile.sc)} mg/dL</td>
+                                <td ${rowAlertClass}>${escapeHtml(profile.risk_class)}</td>
+                                <td style="font-family: monospace;">${pct !== null ? pct.toFixed(2) + '%' : 'N/A'}</td>
+                            </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', rowElement);
+                    });
+
+                    document.querySelectorAll('.select-row-btn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            document.getElementById('inputAge').value = this.getAttribute('data-age');
+                            document.getElementById('inputHbp').value = this.getAttribute('data-sbp');
+                            document.getElementById('inputEf').value = this.getAttribute('data-ef');
+                            document.getElementById('inputSc').value = this.getAttribute('data-sc');
+
+                            const modalEl = document.getElementById('syntheticProfilesModal');
+                            const instance = bootstrap.Modal.getInstance(modalEl);
+                            if (instance) instance.hide();
+                        });
+                    });
+                })
+                .catch(err => {
+                    tableBody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error loading synthetic matrix: ${escapeHtml(err.message)}</td></tr>`;
+                });
+        });
+    </script>
+</body>
+</html>

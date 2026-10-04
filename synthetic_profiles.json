@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name": "Profile #01 (High Risk Baseline)",
+    "age": 75, "anaemia": 1, "cpk": 582, "diabetes": 0, "ef": 20, "hbp": 1, 
+    "platelets": 265000, "sc": 1.9, "ss": 130, "sex": 1, "smoking": 0, "time": 4
+  },
+  {
+    "id": 2,
+    "name": "Profile #02 (Low Risk Control)",
+    "age": 45, "anaemia": 0, "cpk": 120, "diabetes": 0, "ef": 55, "hbp": 0, 
+    "platelets": 280000, "sc": 0.8, "ss": 138, "sex": 0, "smoking": 0, "time": 240
+  },
+  {
+    "id": 3,
+    "name": "Profile #03 (Borderline Alert)",
+    "age": 60, "anaemia": 1, "cpk": 250, "diabetes": 1, "ef": 35, "hbp": 1, 
+    "platelets": 210000, "sc": 1.5, "ss": 134, "sex": 1, "smoking": 1, "time": 85
+  }
+]
